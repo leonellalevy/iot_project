@@ -16,12 +16,13 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
     flex-direction: column; /* Change flex-direction to column */
 }
 
 .card {
-    width: 300px;
+    max-width: 300px;
+    width:100%;
     padding: 20px;
     background-color: #fff;
     border-radius: 10px;

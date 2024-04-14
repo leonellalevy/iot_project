@@ -16,27 +16,28 @@ img_light_off = 'assets/images/lightbulboff.png'
 img_light_on = 'assets/images/lightbulbon.png'
 
 # Fan images
-fan_on = 'assets/images/fan_on.gif'
-fan_off = 'assets/images/fan_off.png'
+img_fan_on = 'assets/images/fan_on.gif'
+img_fan_off = 'assets/images/fan_off.png'
 
 # LED INFORMATION
 LED_PIN = 27
 led = LED(LED_PIN, False)
 
 #MOTOR INFORMATION
-motorE = 22 
-motorA = 27
-motorB = 18
+motorE = 16 
+motorA = 20
+motorB = 21
 motor_state = False
 motor = DCMotor(motorE,motorA,motorB,motor_state)
 
 #DHT11 INFORMATION
-DHT_PIN = 26 
+DHT_PIN = 17 
 dht = DHT.DHT(DHT_PIN) 
 
 #CONSTANTS
 threshold = 24
 token_length = 16
+fan_state = False
 subject = ""
 body = ""
 sender = "arianelevymartel@gmail.com"
@@ -91,7 +92,7 @@ temp_humidity_display = [
     html.Div(className="card", children=[
         html.H2('Fan'),
         html.Div(children=[
-                html.Img(src='assets/images/fan_off.png', id='fan-img', className="feature-img" ),
+                html.Img(src=img_fan_off, id='fan-img', className="feature-img" ),
             ]),
         ])
 ]
@@ -126,33 +127,25 @@ def update_led(on):
         return img_light_off, False
     
 
-def getDHT11Info():
-    for i in range(0,15):
-        chk = dht.readDHT11()	
-        if(chk is dht.DHTLIB_OK):	
-            break
-
-    data=[]
-    data.append(dht.temperature)
-    data.append(dht.humidity)
-    return data
-
 # Callback temperature and humidity values
 @app.callback(
     Output('temp_thermometer', 'value'),
     Output('humidity-gauge', 'value'),
-    Input('interval-component', 'n_intervals')
+    Input('refresh', 'n_intervals')
 )
-def update_thermometer_gauge(n):
-    DHT11_data = dht.getDHT11Info()
-    temp = DHT11_data[0]
-    humid = DHT11_data[1]
+def update_thermometer_gauge(n_intervals):
+    for i in range(0,15):
+        chk = dht.readDHT11()	
+        if(chk is dht.DHTLIB_OK):	
+            break
+    temp = dht.temperature
+    humid = dht.humidity
     return temp,humid
 
 # Callback for updating the fan image based on temperature
 @app.callback(
     Output('fan-img', 'src'),
-    Input('temp_thermometer', 'value'),  # Use temperature value as input
+    Input('temp_thermometer', 'value'),  
     Input('email-interval', 'n_intervals'),
 )
 def update_fan(temp, n_intervals):
@@ -160,8 +153,7 @@ def update_fan(temp, n_intervals):
     global email_count
     global unique_token
 
-    print('Temperature:', temp)
-    
+
     if temp > threshold:
         if not fan_state:
             if email_count == 0:
@@ -178,19 +170,21 @@ def update_fan(temp, n_intervals):
 
             if client_reply:
                 fan_state = True
+                print("Fan is on")
                 motor.setupMotorState(fan_state)
-                return fan_on, 'Fan is ON'
+                return img_fan_on
             else:
                 fan_state = False
                 motor.setupMotorState(fan_state)
-                return fan_off, 'Fan is OFF'
+                return img_fan_off
         else:
-            return fan_on, 'Fan is ON'
+            return img_fan_on
     else:
         email_count = 0
         fan_state = False
         motor.setupMotorState(fan_state)
-        return fan_off, 'Fan is OFF'
+        return img_fan_off
+
 
 # Run the app
 if __name__ == '__main__':

@@ -1,4 +1,5 @@
 #imports phase 1
+from datetime import datetime
 from dash import Dash, html, Input, Output, callback, dcc
 import dash_daq as daq
 from LED import LED
@@ -11,6 +12,13 @@ import Freenove_DHT as DHT
 from DCMotor import DCMotor
 from email_manager import EmailManager
 
+#imports phase 3
+import paho.mqtt.client as mqtt
+from mqtt_manager import MQTTManager
+
+#for Test
+import random
+
 # Light images
 img_light_off = 'assets/images/lightbulboff.png'
 img_light_on = 'assets/images/lightbulbon.png'
@@ -19,8 +27,13 @@ img_light_on = 'assets/images/lightbulbon.png'
 img_fan_on = 'assets/images/fan_on.gif'
 img_fan_off = 'assets/images/fan_off.png'
 
+# Initialize managers
+email_manager = None
+mqtt_manager = None
+
 # LED INFORMATION
 LED_PIN = 27
+led = None
 led = LED(LED_PIN, False)
 
 #MOTOR INFORMATION
@@ -28,14 +41,17 @@ motorE = 16
 motorA = 20
 motorB = 21
 motor_state = False
+# motor = None # for test
 motor = DCMotor(motorE,motorA,motorB,motor_state)
 
 #DHT11 INFORMATION
 DHT_PIN = 17 
-dht = DHT.DHT(DHT_PIN) 
+dht = None
+# dht = DHT.DHT(DHT_PIN) 
 
 #CONSTANTS
-threshold = 24
+threshold_temperature = 24
+threshold_brightness = 50
 token_length = 16
 fan_state = False
 subject = ""
@@ -52,6 +68,17 @@ def setup_email():
     email_manager = EmailManager(sender, password, recipients)
 
 setup_email()
+
+#MQTT INFORMATION
+mqtt_broker = "10.0.0.101"
+mqtt_port = 1883
+mqtt_topic = "sensor/value"
+
+def setup_mqtt():
+    global mqtt_manager
+    mqtt_manager = MQTTManager(mqtt_broker, mqtt_port, mqtt_topic)
+    mqtt_manager.connected_event.wait(timeout=10)
+
 #---------------------START OF THE APPLICATION-----------------------
 app = Dash(__name__)
 
@@ -97,14 +124,43 @@ temp_humidity_display = [
         ])
 ]
 
+#Contenu de phase 3
+light_intensity_display=[
+    html.Div(className="card", children=[
+        html.H2('Light Intensity'),
+        html.Div([
+            html.Div(id='bulb', className='bulb', children=[
+                html.Div(id='light', className='light')
+                ])
+        ]),
+        daq.Gauge(
+            id='light-intensity-gauge',
+            color={"gradient":True,"ranges":{"green":[0,400],"yellow":[400,700],"red":[700,1000]}},
+            showCurrentValue=True, 
+            max=1000,
+            min=0,
+            value=0
+        ),
+    ]),
+]
+
+#button = html.Button('Update Bulb', id='update-bulb-button') #for test
 # App layout
 app.layout = html.Div(id='layout', children=[
     html.H1('IoT Project', style={'margin-top': '20px'}),
+    html.Header([
+        html.Link(
+            rel='stylesheet',
+            href='/assets/styles.css' 
+        )
+    ]),
     html.Div(id='container', children=[
         html.Div(id='column', children=[
             html.Div(id="right-container", children=[
                 html.Div(id='light-container', children=light_display),
-                html.Div(id='sensor-container', children=temp_humidity_display)
+                html.Div(id='sensor-container', children=temp_humidity_display),
+                html.Div(id='photoresistor-container', children=light_intensity_display),
+                #button #for test
             ])
         ])
     ]),
@@ -154,7 +210,7 @@ def update_fan(temp, n_intervals):
     global unique_token
 
 
-    if temp > threshold:
+    if temp > threshold_temperature:
         if not fan_state:
             if email_count == 0:
                 email_count = 1
@@ -185,6 +241,37 @@ def update_fan(temp, n_intervals):
         motor.setupMotorState(fan_state)
         return img_fan_off
 
+# Update the callback to adjust the brightness variable based on the gauge value
+@app.callback(
+    Output('bulb', 'style'),
+    Input('light-intensity-gauge', 'value'),
+    #prevent_initial_call=True #for test
+)
+def update_bulb_style(gauge_value):
+    global light_intensity
+    light_intensity = mqtt_manager.get_light_intensity()
+    brightness = min(light_intensity / 1000.0, 1.0) * 100
+    print(brightness)
+    #brightness = gauge_value / 10  # Example: Adjust the range if needed
+    return {'--brightness': f'{brightness}%'}
+
+# Callback for updating the fan image based on temperature
+@app.callback(
+    Output('light-img', 'src'),
+    Output('light-switch', 'on'),
+    Input('light-switch', 'value'),  
+    Input('email-interval', 'n_intervals')
+)
+def update_light_depending_brightness(temp, n_intervals):
+
+    if light_intensity < threshold_brightness:
+        current_time = datetime.now().strftime("%H:%M")
+        subject = "Light Notification"
+        body = f"The light is ON at {current_time} time."
+        email_manager.send_email(subject, body)
+        print('Email sent')
+        led.turn_on()
+        return img_light_on, True
 
 # Run the app
 if __name__ == '__main__':

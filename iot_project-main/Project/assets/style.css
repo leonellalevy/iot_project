@@ -78,3 +78,27 @@ body {
 .dark-theme-control .react-daqctl-dark {
     box-shadow: none;
 }
+
+/* Add this CSS to control the brightness of the bulb */
+.bulb {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background-color: #f4f4f4;
+    border: 5px solid #ddd;
+    box-shadow: inset 0px 0px 20px rgba(0, 0, 0, 0.2);
+    position: relative;
+    filter: brightness(var(--brightness, 100%)); /* Apply brightness filter */
+}
+
+.light {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 50px;
+    height: 50px;
+    background-color: #fff;
+    border-radius: 50%;
+    box-shadow: 0px 0px 20px rgba(255, 255, 255, 0.5);
+}

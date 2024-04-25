@@ -2,9 +2,9 @@
 #include <PubSubClient.h>
 
 // Network settings
-const char* ssid = "HelixMRM 2.4";
-const char* password = "Mansourpor";
-const char* mqtt_server = "10.0.0.101";
+const char* ssid = "Leo";
+const char* password = "Michi1739$";
+const char* mqtt_server = "172.20.10.2";
 
 // MQTT Client
 WiFiClient espClient;
@@ -12,11 +12,11 @@ PubSubClient client(espClient);
 
 // GPIO Pin Definitions
 const int ledPin = 5; 
-const int sensorPin = 16; 
+const int sensorPin = A0; 
 
 // Sensor Settings
 int sensorValue;
-const int threshold = 50;
+const int threshold = 500;
 
 // MQTT Topics
 const char* sensorTopic = "sensor/value";
@@ -107,5 +107,5 @@ void loop() {
   
   client.publish(lightTopic, sensorStr.c_str());
 
-  delay(5000);
+  delay(1000);
 }

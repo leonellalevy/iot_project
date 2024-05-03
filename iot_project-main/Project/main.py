@@ -9,71 +9,64 @@ import smtplib
 import imaplib
 import email
 import Freenove_DHT as DHT
-from DCMotor import DCMotor
+from motor import Motor
 from email_manager import EmailManager
 
 #import phase 3
 from mqtt_manager import MQTTManager
 from dash import callback_context
 
-# Light images
+# Light and Fan images
 img_light_off = 'assets/images/lightbulboff.png'
 img_light_on = 'assets/images/lightbulbon.png'
-
-# Fan images
 img_fan_on = 'assets/images/fan_on.gif'
 img_fan_off = 'assets/images/fan_off.png'
 
-# LED INFORMATION
+# GPIO pins
 LED_PIN = 27
+MOTOR_E = 16
+MOTOR_A = 20
+MOTOR_B = 21
+DHT_PIN = 17
+
+#Initialize components
 led = LED(LED_PIN, False)
+motor = Motor(MOTOR_E, MOTOR_A, MOTOR_B, motor_state=False)
+dht = DHT(DHT_PIN) 
 
-#MOTOR INFORMATION
-motorE = 16 
-motorA = 20
-motorB = 21
-motor_state = False
-motor = DCMotor(motorE,motorA,motorB,motor_state)
+# Email credentials and recipients
+sender = "arianelevymartel@gmail.com"
+password = "jwzdcnmbmzypdjeh"
+recipients = "sachabloup@gmail.com"
 
-#DHT11 INFORMATION
-DHT_PIN = 17 
-dht = DHT.DHT(DHT_PIN) 
+# CONSTANTS
+token_length = 10
+threshold = 24
+threshold_brightness = 600
+email_count = 0
+subject = ""
+body = ""
 
-#Decalre mqtt
+# Email and MQTT setup
+email_count = 0
 mqtt_broker = "172.20.10.2"
 mqtt_port = 1883
 mqtt_topic = "sensor/value"
-
-global mqtt_manager
 mqtt_manager = None
 
 def setup_mqtt():
     global mqtt_manager
     mqtt_manager = MQTTManager(mqtt_broker, mqtt_port, mqtt_topic)
 
-setup_mqtt() 
-
-#CONSTANTS
-threshold = 24
-threshold_brightness = 600
-
-token_length = 16
-fan_state = False
-subject = ""
-body = ""
-sender = "arianelevymartel@gmail.com"
-password = "jwzdcnmbmzypdjeh"
-recipients = "sachabloup@gmail.com"
-
-# EMAIL INFORMATION 
-email_count = 0
-
-# Function to set up EmailManager
 def setup_email():
-    global email_manager
-    email_manager = EmailManager(sender, password, recipients)
+    global email_manager_fan, email_manager_led
+    email_manager_fan = EmailManager(sender, password, recipients)
+    email_manager_led = EmailManager(sender, password, recipients)
 
+#Setting up everything
+setup_mqtt()
 setup_email()
+
 #---------------------START OF THE APPLICATION-----------------------
 app = Dash(__name__)
 
@@ -134,7 +127,7 @@ sensor_value_display = [
     ])
 ]
 
-# App layout
+#-------------Display of the application-----------
 app.layout = html.Div(id='layout', children=[
     html.H1('IoT Project', style={'margin-top': '20px'}),
     html.Div(id='container', children=[
@@ -173,7 +166,7 @@ def update_led_combined(on, n_intervals):
             current_time = datetime.datetime.now().strftime("%H:%M")
             subject = "Light Notification"
             body = f"The light is ON at {current_time}."
-            email_manager.send_email(subject, body)
+            email_manager_led.send_email(subject, body)
             print('Email sent for light')
             return img_light_on
         else:
@@ -203,23 +196,20 @@ def update_thermometer_gauge(n_intervals):
     Input('email-interval', 'n_intervals'),
 )
 def update_fan(temp, n_intervals):
-    global fan_state
-    global email_count
-    global unique_token
+    global fan_state, email_count, token
 
 
     if temp > threshold:
         if not fan_state:
             if email_count == 0:
                 email_count = 1
-                unique_token = email_manager.generate_token(token_length)
-                subject = f'{unique_token}'
-                body = f'The current temperature is {temp}°C. Would you like to turn on the fan?'
-                email_manager.send_email(subject, body)
+                token = email_manager_fan.generate_token(token_length)
+                subject = f'{token}'
+                body = f'Hello! This message is to let you know that the current temperature is {temp}°C. Do you want to turn it on? If the answer is yes, please answer the email with the word <Yes>. Have a nice day!'
+                email_manager_fan.send_email(subject, body)
                 print('Email sent')
 
-            # Check for client reply
-            client_reply = email_manager.read_recent_email_reply(unique_token, temp)
+            client_reply = email_manager_fan.read_email(token, temp)
             print('Client reply:', client_reply)
 
             if client_reply:

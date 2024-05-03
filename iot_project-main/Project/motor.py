@@ -1,6 +1,6 @@
 import RPi.GPIO as GPIO
 
-class DCMotor:    
+class Motor:    
     def __init__(self,MotorE,MotorA,MotorB,state=False):
         self.MotorE = MotorE
         self.MotorA = MotorA

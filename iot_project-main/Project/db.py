@@ -19,10 +19,10 @@ class DBManager():
         except Exception as e:
             print(f"Error in db: {e}")
 
-    def check_user_exists(self, user_info):
+    def check_user_exists(self, rfid):
         conn, cursor = self._establish_connection_and_get_cursor()
         try:
-            cursor.execute("SELECT COUNT(*) FROM Users WHERE user_id = ?", (user_info,))
+            cursor.execute("SELECT COUNT(*) FROM User WHERE RFID = ?", (rfid,))
             count = cursor.fetchone()[0]
             return count > 0
         except Exception as e:
@@ -30,10 +30,10 @@ class DBManager():
         finally:
             self._close_connection(conn, cursor)
     
-    def get_user_thresholds(self, user_info):
+    def get_user_thresholds(self, rfid):
         conn, cursor = self._establish_connection_and_get_cursor()
         try:
-            cursor.execute("SELECT temperature_threshold, light_intensity_threshold FROM Users WHERE user_id = ?", (user_info,))
+            cursor.execute("SELECT * FROM User WHERE RFID = ?", (rfid,))
             thresholds = cursor.fetchone()
             return thresholds
         except Exception as e:

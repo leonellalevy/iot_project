@@ -2,19 +2,22 @@
 import datetime
 from dash import Dash, html, Input, Output, callback, dcc
 import dash_daq as daq
-from LED import LED
+#from LED import LED
 
 #imports phase 2
 import smtplib
 import imaplib
 import email
-import Freenove_DHT as DHT
-from motor import Motor
+#import Freenove_DHT as DHT
+#from motor import Motor
 from email_manager import EmailManager
 
 #import phase 3
 from mqtt_manager import MQTTManager
 from dash import callback_context
+
+#import phase 4
+from user import User
 
 # Light and Fan images
 img_light_off = 'assets/images/lightbulboff.png'
@@ -30,9 +33,12 @@ MOTOR_B = 21
 DHT_PIN = 17
 
 #Initialize components
-led = LED(LED_PIN, False)
-motor = Motor(MOTOR_E, MOTOR_A, MOTOR_B, motor_state=False)
-dht = DHT(DHT_PIN) 
+#led = LED(LED_PIN, False)
+#motor = Motor(MOTOR_E, MOTOR_A, MOTOR_B, motor_state=False)
+#dht = DHT(DHT_PIN) 
+led = None
+motor = None
+dht = None
 
 # Email credentials and recipients
 sender = "arianelevymartel@gmail.com"
@@ -41,27 +47,41 @@ recipients = "sachabloup@gmail.com"
 
 # CONSTANTS
 token_length = 10
-threshold = 24
-threshold_brightness = 600
 email_count = 0
 subject = ""
 body = ""
 
-# Email and MQTT setup
+# Email, database and MQTT setup
 email_count = 0
-mqtt_broker = "172.20.10.2"
+mqtt_broker =  "192.168.56.1"
+#mqtt_broker = "172.20.10.2"
 mqtt_port = 1883
-mqtt_topic = "sensor/value"
+mqtt_topic = ["sensor/value","rfid/tag"]
 mqtt_manager = None
+current_user = None
+db_file = "assets/Database/bob.db"
 
 def setup_mqtt():
     global mqtt_manager
-    mqtt_manager = MQTTManager(mqtt_broker, mqtt_port, mqtt_topic)
+    mqtt_manager = MQTTManager(mqtt_broker, mqtt_port, mqtt_topic, db_file)
+    mqtt_manager.set_user_callback(handle_user_update)
 
 def setup_email():
-    global email_manager_fan, email_manager_led
+    global email_manager_fan, email_manager_led, email_manager_user
     email_manager_fan = EmailManager(sender, password, recipients)
     email_manager_led = EmailManager(sender, password, recipients)
+    email_manager_user = EmailManager(sender, password, recipients)
+
+def handle_user_update(user_info):
+    global current_user
+    current_user = user_info
+
+    if current_user:
+        current_time = datetime.datetime.now().strftime("%H:%M")
+        subject = "User Entry Notification"
+        body = f"User {current_user.name} entered at {current_time}."
+        email_manager_user.send_email(subject, body)
+        print('Email sent for user entry')
 
 #Setting up everything
 setup_mqtt()
@@ -127,6 +147,19 @@ sensor_value_display = [
     ])
 ]
 
+#Contenu de phase 4
+user_info_display = [
+    html.Div(id='user-info-container', className="card", children=[
+        html.H2('User Information'),
+        html.Div(id='user-info', children=[
+            html.P("RFID:"),
+            html.P("Name:"),
+            html.P("Temperature Threshold:"),
+            html.P("Light Threshold:"),
+        ]),
+    ])
+]
+
 #-------------Display of the application-----------
 app.layout = html.Div(id='layout', children=[
     html.H1('IoT Project', style={'margin-top': '20px'}),
@@ -135,7 +168,8 @@ app.layout = html.Div(id='layout', children=[
             html.Div(id="right-container", children=[
                 html.Div(id='light-container', children=light_display),
                 html.Div(id='sensor-container', children=temp_humidity_display),
-                html.Div(id='sensor-value-container', children=sensor_value_display)
+                html.Div(id='sensor-value-container', children=sensor_value_display),
+                html.Div(id='user-info-container', children=user_info_display),
             ])
         ])
     ]),
@@ -162,7 +196,7 @@ def update_led_combined(on, n_intervals):
         #send email for light
     elif triggered_id == 'email-interval':
         light_intensity = mqtt_manager.get_light_intensity()
-        if light_intensity < threshold_brightness:
+        if light_intensity < current_user.light_threshold:
             current_time = datetime.datetime.now().strftime("%H:%M")
             subject = "Light Notification"
             body = f"The light is ON at {current_time}."
@@ -199,15 +233,17 @@ def update_fan(temp, n_intervals):
     global fan_state, email_count, token
 
 
-    if temp > threshold:
+    if temp > current_user.temp_threshold:
         if not fan_state:
             if email_count == 0:
                 email_count = 1
                 token = email_manager_fan.generate_token(token_length)
                 subject = f'{token}'
-                body = f'Hello! This message is to let you know that the current temperature is {temp}°C. Do you want to turn it on? If the answer is yes, please answer the email with the word <Yes>. Have a nice day!'
+                body = f'Hello! This message is to let you know that the current temperature is {temp}°C. ' \
+                       f'Do you want to turn it on? If the answer is yes, please answer the email with the word <Yes>. ' \
+                       f'Have a nice day!'
                 email_manager_fan.send_email(subject, body)
-                print('Email sent')
+                print('Email sent for fan')
 
             client_reply = email_manager_fan.read_email(token, temp)
             print('Client reply:', client_reply)
@@ -239,6 +275,26 @@ def update_sensor_value(n_intervals):
         return mqtt_manager.get_light_intensity()
     return 0 
 
+@app.callback(
+    Output('user-info', 'children'),
+    Input('refresh', 'n_intervals')
+)
+def update_user_info(n_intervals):
+    if current_user:
+        return [
+            html.P(f"RFID: {current_user.rfid}"),
+            html.P(f"Name: {current_user.name}"),
+            html.P(f"Temperature Threshold: {current_user.temp_threshold}"),
+            html.P(f"Light Threshold: {current_user.light_threshold}"),
+        ]
+    else:
+        return [
+            html.P("RFID:"),
+            html.P("Name:"),
+            html.P("Temperature Threshold:"),
+            html.P("Light Threshold:"),
+        ]
+    
 # Run the app
 if __name__ == '__main__':
     app.run_server(debug=True)

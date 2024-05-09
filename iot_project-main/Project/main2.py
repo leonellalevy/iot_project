@@ -96,45 +96,91 @@ setup_email()
 #---------------------START OF THE APPLICATION-----------------------
 app = Dash(__name__)
 
-app.layout = html.Div([
-    html.H1('LOM Home', style={'textAlign': 'center'}),
-    dcc.Interval(id='refresh-interval', interval=2000, n_intervals=0),
-    html.Div(className="container", children=[
-        html.Div(className="left-panel", children=[
-            html.H3('User Information'),
+# Contenu de phase 1
+light_display = [
+    html.Div(className="card", children=[
+        html.H2('LED'),
+        html.Img(src=img_light_off, id='light-img', className="feature-img"),
+        html.Br(),
+        daq.BooleanSwitch(on=False, id='light-switch', className='dark-theme-control'),
+    ])
+]
+
+#Contenu de phase 2
+temp_humidity_display = [
+    html.Div(className="card", children=[
+        html.H2('Temperature (°C)'),
+        daq.Thermometer(
+            id='temp_thermometer',
+            showCurrentValue=True, 
+            height=120,
+            max=40,
+            min=10,
+            value=0
+        ),
+    ]),
+    html.Div(className="card", children=[
+        html.H2('Humidity (%)'),
+        daq.Gauge(
+            id='humidity-gauge',
+            color={"gradient":True,"ranges":{"green":[0,60],"yellow":[60,80],"red":[80,100]}},
+            showCurrentValue=True, 
+            max=100,
+            min=0,
+            value=0
+        ),
+    ]),
+    html.Div(className="card", children=[
+        html.H2('Fan'),
+        html.Div(children=[
+                html.Img(src=img_fan_off, id='fan-img', className="feature-img" ),
+            ]),
+        ])
+]
+
+#Contenu de phase 3
+sensor_value_display = [
+    html.Div(className="card", children=[
+        html.H2('Sensor Value'),
+        daq.Gauge(
+            id='sensor-value-gauge',
+            color={"gradient":True,"ranges":{"green":[0,100],"yellow":[100,200],"red":[200,300]}},
+            showCurrentValue=True, 
+            max=1000,
+            min=0,
+            value=0
+        ),
+    ])
+]
+
+#Contenu de phase 4
+user_info_display = [
+    html.Div(className="card", children=[  # Removed the ID here if not needed elsewhere
+        html.H2('User Information'),
+        html.Div(id='user-info', children=[
             html.P("RFID:"),
             html.P("Name:"),
             html.P("Temperature Threshold:"),
             html.P("Light Threshold:"),
         ]),
-        html.Div(className="right-content", children=[
-            html.Div(className="row", children=[
-                html.Div(className="column", children=[
-                    html.H3('Temperature (°C)'),
-                    daq.Thermometer(id='temp-thermometer', value=0, min=10, max=40, height=150, showCurrentValue=True)
-                ]),
-                html.Div(className="column", children=[
-                    html.H3('Humidity (%)'),
-                    daq.Gauge(id='humidity-gauge', value=50, min=0, max=100, showCurrentValue=True)
-                ]),
-                html.Div(className="column", children=[
-                    html.H3('Sensor Value'),
-                    daq.Gauge(id='sensor-value-gauge', value=0, min=0, max=1000, showCurrentValue=True)
-                ]),
-            ]),
-            html.Div(className="row", children=[
-                html.Div(className="column", children=[
-                    html.H3('LED Control'),
-                    html.Img(src=img_light_off, id='light-img', style={'width': '100px'}),
-                    daq.BooleanSwitch(id='light-switch', on=False)
-                ]),
-                html.Div(className="column", children=[
-                    html.H3('Fan Status'),
-                    html.Img(src=img_fan_off, id='fan-img', style={'width': '100px'}),
-                ])
+    ])
+]
+
+#-------------Display of the application-----------
+app.layout = html.Div(id='layout', children=[
+    html.H1('IoT Project', style={'margin-top': '20px'}),
+    html.Div(id='container', children=[
+        html.Div(id='column', children=[
+            html.Div(id="right-container", children=[
+                html.Div(id='light-container', children=light_display),
+                html.Div(id='sensor-container', children=temp_humidity_display),
+                html.Div(id='sensor-value-container', children=sensor_value_display),
+                html.Div(id='user-info-container', children=user_info_display)  # This ID is now unique
             ])
         ])
-    ])
+    ]),
+    dcc.Interval(id='email-interval', interval=5*1000, n_intervals=0),
+    dcc.Interval(id='refresh', interval=2*1000, n_intervals=0)
 ])
 
 # Callback LED state
@@ -262,5 +308,6 @@ def update_user_info(n_intervals):
             html.P("Light Threshold:"),
         ]
     
+# Run the app
 if __name__ == '__main__':
     app.run_server(debug=True)

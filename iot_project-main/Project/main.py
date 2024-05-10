@@ -33,10 +33,13 @@ MOTOR_B = 21
 DHT_PIN = 17
 
 motor_state=False
+fan_state = False
+led_state = False
 #Initialize components
 led = LED(LED_PIN, False)
 motor = Motor(MOTOR_E, MOTOR_A, MOTOR_B, motor_state)
 dht = DHT.DHT(DHT_PIN) 
+motor.setupMotorState(fan_state)
 #led = None
 #motor = None
 #dht = None
@@ -55,7 +58,7 @@ body = ""
 # Email, database and MQTT setup
 email_count = 0
 #mqtt_broker =  "192.168.56.1"
-mqtt_broker = "172.20.10.9"
+mqtt_broker = "172.20.10.2"
 #mqtt_broker = "192.168.0.107"
 mqtt_port = 1883
 mqtt_topic = ["sensor/value","rfid/tag"]
@@ -98,9 +101,8 @@ app = Dash(__name__)
 
 app.layout = html.Div([
     html.H1('LOM Home', style={'textAlign': 'center'}),
-    dcc.Interval(id='refresh-interval', interval=2000, n_intervals=0),
     html.Div(className="container", children=[
-        html.Div(className="left-panel", children=[
+        html.Div(className="user-info", id="user-info", children=[
             html.H3('User Information'),
             html.P("RFID:"),
             html.P("Name:"),
@@ -111,7 +113,7 @@ app.layout = html.Div([
             html.Div(className="row", children=[
                 html.Div(className="column", children=[
                     html.H3('Temperature (°C)'),
-                    daq.Thermometer(id='temp-thermometer', value=0, min=10, max=40, height=150, showCurrentValue=True)
+                    daq.Thermometer(id='temp_thermometer', value=0, min=10, max=40, height=150, showCurrentValue=True)
                 ]),
                 html.Div(className="column", children=[
                     html.H3('Humidity (%)'),
@@ -134,38 +136,46 @@ app.layout = html.Div([
                 ])
             ])
         ])
-    ])
+    ]),
+    dcc.Interval(id='email-interval', interval=5*1000, n_intervals=0),
+    dcc.Interval(id='refresh', interval=2*1000, n_intervals=0)
 ])
 
 # Callback LED state
 @app.callback(
-    Output('light-img', 'src'),
+    [Output('light-img', 'src'), Output('light-switch', 'on')],
     [Input('light-switch', 'on'),
      Input('email-interval', 'n_intervals')]
 )
 def update_led_combined(on, n_intervals):
+    global led_state
     triggered_id = callback_context.triggered[0]['prop_id'].split('.')[0]
 
     if triggered_id == 'light-switch':
+        led_state = True
         if on:
             led.turn_on()
-            return img_light_on
+            return img_light_on, True
         else:
             led.turn_off()
-            return img_light_off
+            return img_light_off, False
     elif triggered_id == 'email-interval':
         if current_user is not None:
             light_intensity = mqtt_manager.get_light_intensity()
             if light_intensity < current_user.light_threshold:
+                led_state = True
+                led.turn_on()
                 current_time = datetime.datetime.now().strftime("%H:%M")
                 subject = "Light Notification"
                 body = f"The light is ON at {current_time}."
                 email_manager_led.send_email(subject, body)
                 print('Email sent for light')
-                return img_light_on
-        return img_light_off
+                return img_light_on, True    
+        led_state = False
+        led.turn_off()
+        return img_light_off, False
     else:
-        return img_light_off
+        return img_light_off, False
 
 # Callback temperature and humidity values
 @app.callback(

@@ -18,6 +18,7 @@ from dash import callback_context
 
 #import phase 4
 from user import User
+import bluetooth
 
 # Light and Fan images
 img_light_off = 'assets/images/lightbulboff.png'
@@ -58,7 +59,7 @@ body = ""
 # Email, database and MQTT setup
 email_count = 0
 #mqtt_broker =  "192.168.56.1"
-mqtt_broker = "172.20.10.2"
+mqtt_broker = "172.20.10.9"
 #mqtt_broker = "192.168.0.107"
 mqtt_port = 1883
 mqtt_topic = ["sensor/value","rfid/tag"]
@@ -95,6 +96,19 @@ def handle_user_update(user_info):
 #Setting up everything
 setup_mqtt()
 setup_email()
+
+bluetooth_devices = set()
+
+# Modify scan_bluetooth to return the list of Bluetooth addresses
+def scan_bluetooth(threshold_rssi):
+    global bluetooth_devices
+    nearby_devices = bluetooth.discover_devices(duration=8)  # Discover nearby devices
+    new_devices = set()
+    for addr in nearby_devices:
+        new_devices.add(addr)
+    added_devices = new_devices - bluetooth_devices  # New devices compared to previous scan
+    bluetooth_devices = new_devices  # Update the global variable with the new list
+    return list(added_devices) 
 
 #---------------------START OF THE APPLICATION-----------------------
 app = Dash(__name__)
@@ -133,6 +147,12 @@ app.layout = html.Div([
                 html.Div(className="column", children=[
                     html.H3('Fan Status'),
                     html.Img(src=img_fan_off, id='fan-img', style={'width': '100px'}),
+                ]),
+                html.Div(className="column", children=[
+                html.H3('Bluetooth Devices'),
+                daq.LEDDisplay(id='bluetooth-count', value="0", color="#92e0d3", backgroundColor="#1e2130"),
+                daq.BooleanSwitch(id='bluetooth-scan-switch', on=False),
+                dcc.Interval(id='bluetooth-scan-interval', interval=3000, n_intervals=0, disabled=True)
                 ])
             ])
         ])
@@ -272,5 +292,24 @@ def update_user_info(n_intervals):
             html.P("Light Threshold:"),
         ]
     
+
+@app.callback(
+    Output('bluetooth-count', 'value'),
+    Output('bluetooth-count', 'color'),
+    Input('bluetooth-scan-switch', 'on'),
+    Input('bluetooth-scan-interval', 'n_intervals'),
+)
+def update_bluetooth_count_and_track_devices(on, n_intervals):
+    global bluetooth_devices
+    if on:
+        new_devices = scan_bluetooth(-50)
+        bluetooth_count = len(bluetooth_devices)
+        color = "#92e0d3"  
+        if new_devices:
+            color = "#FF0000" 
+            print(f"New Bluetooth Devices: {new_devices}")
+        return str(bluetooth_count), color
+    return "0", "#92e0d3" 
+
 if __name__ == '__main__':
     app.run_server(debug=True)
